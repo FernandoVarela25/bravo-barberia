@@ -1,0 +1,23 @@
+# SQLite requires this paid persistent disk and one service instance.
+services:
+  - type: web
+    name: bravo-barberia
+    runtime: node
+    plan: starter
+    buildCommand: node --check server.cjs && node --check app.js
+    startCommand: node server.cjs
+    healthCheckPath: /api/session
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 24.19.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: DATA_DIR
+        value: /var/data/bravo
+      - key: APP_ORIGIN
+        sync: false
+    disk:
+      name: bravo-data
+      mountPath: /var/data
+      sizeGB: 1
