@@ -42,3 +42,9 @@ Publicación HTTPS, respaldo automático, recuperación de contraseña, datos/fo
 ## Identidad visual — Fuera del molde
 
 Rediseño editorial con negro tinta, marfil y naranja, tipografía Barlow Condensed y Space Grotesk, portada asimétrica, carta de servicios en filas y galería de alturas alternadas. Imagen conceptual de portada creada con la herramienta integrada de generación de imágenes, ubicada en assets/bravo-editorial.png. No representa un servicio real documentado. El prompt de generación está guardado en assets/hero-prompt.txt.
+
+## Edición azul del estudio
+
+La pestaña Contenido del panel permite editar titular, introducción, presentación, dirección, teléfono y hasta 6 videos. Los videos se agregan mediante enlaces HTTPS directos a MP4/WebM alojados externamente; no se suben archivos de video al disco temporal de Render. La sección se oculta cuando no hay videos. Reproducción manual, sin autoplay, y animaciones que respetan la preferencia de movimiento reducido.
+
+Verificación: `node --test schedule.test.cjs server.test.cjs site-content.test.cjs`.
