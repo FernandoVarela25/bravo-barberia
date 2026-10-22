@@ -15,8 +15,18 @@ test('Authentication, persistence, permissions and booking conflicts',async()=>{
  assert.equal((await request('/api/admin/site','PUT',site,cookie)).status,409);
  assert.equal((await request('/api/content')).data.site.value.headline,'Estudio azul');
 content.services.value.corte.price=299;assert.equal((await request('/api/admin/services','PUT',content.services,cookie)).status,200);assert.equal((await request('/api/admin/services','PUT',content.services,cookie)).status,409);assert.equal((await request('/api/admin/gallery','PUT',content.gallery,cookie,'https://attacker.example')).status,403);
+ const manual={service:'corte',date:'2099-11-01',time:'10:00',name:'WhatsApp test',phone:'5500000000'};
+ assert.equal((await request('/api/admin/bookings','POST',manual)).status,401);
+ assert.equal((await request('/api/admin/bookings','POST',{...manual,time:'02:00'},cookie)).status,400);
+ const manualResult=await request('/api/admin/bookings','POST',manual,cookie);assert.equal(manualResult.status,201);
+ const savedManual=(await request('/api/admin/bookings','GET',undefined,cookie)).data.find(b=>b.id===manualResult.data.id);assert.equal(savedManual.source,'whatsapp');assert.equal(savedManual.status,'confirmada');assert.equal(savedManual.price,299);
+ const manualSlots=(await request('/api/slots?date=2099-11-01&service=corte')).data;assert(!manualSlots.includes('10:00'));assert(!manualSlots.includes('10:30'));assert(manualSlots.includes('11:00'));
+ assert.equal((await request('/api/bookings','POST',manual)).status,409);assert.equal((await request('/api/admin/bookings','POST',manual,cookie)).status,409);
+ assert.equal((await request('/api/admin/bookings/'+manualResult.data.id,'PATCH',{status:'cancelada'},cookie)).status,200);
+ assert((await request('/api/slots?date=2099-11-01&service=corte')).data.includes('10:00'));
+ const mixed=await Promise.all([request('/api/admin/bookings','POST',manual,cookie),request('/api/bookings','POST',manual)]);assert.deepEqual(mixed.map(r=>r.status).sort(),[201,409]);
  const booking={service:'corte',date:'2099-10-21',time:'10:00',name:'Test customer',phone:'5500000000',price:1};const results=await Promise.all([request('/api/bookings','POST',booking),request('/api/bookings','POST',booking)]);assert.deepEqual(results.map(r=>r.status).sort(),[201,409]);const id=results.find(r=>r.status===201).data.id;
- const availability=await request('/api/availability?date=2099-10-21');assert.deepEqual(Object.keys(availability.data[0]).sort(),['duration','time']);let bookings=(await request('/api/admin/bookings','GET',undefined,cookie)).data;assert.equal(bookings[0].price,299);assert.equal((await request('/api/bookings','POST',{...booking,time:'10:30'})).status,409);
+ const availability=await request('/api/availability?date=2099-10-21');assert.deepEqual(Object.keys(availability.data[0]).sort(),['duration','time']);let bookings=(await request('/api/admin/bookings','GET',undefined,cookie)).data;assert.equal(bookings.find(b=>b.id===id).price,299);assert.equal((await request('/api/bookings','POST',{...booking,time:'10:30'})).status,409);
  assert.equal((await request('/api/admin/bookings/'+id,'PATCH',{status:'cancelada'},cookie)).status,200);assert.equal((await request('/api/bookings','POST',booking)).status,201);assert.equal((await request('/api/admin/bookings/'+id,'PATCH',{status:'confirmada'},cookie)).status,409);
  const pic={id:'sample',title:'Test photo',category:'cortes',src:'https://images.unsplash.com/photo-1621605815971-fbc98d665033'};assert.equal((await request('/api/admin/gallery','PUT',{value:[pic],version:content.gallery.version},cookie)).status,200);
  assert.equal((await request('/api/admin/schedule')).status,401);
@@ -27,7 +37,7 @@ content.services.value.corte.price=299;assert.equal((await request('/api/admin/s
  let slots=(await request('/api/slots?date=2099-10-22&service=corte')).data;
  for(const time of ['12:30','13:00','13:30'])assert(!slots.includes(time),'Blocked overlap must be hidden: '+time);
  assert(slots.includes('12:00'));assert(slots.includes('14:00'));
- assert.equal((await request('/api/bookings','POST',{...booking,date:'2099-10-22',time:'12:30'})).status,400);
+ assert.equal((await request('/api/bookings','POST',{...booking,date:'2099-10-22',time:'12:30'})).status,400);assert.equal((await request('/api/admin/bookings','POST',{...manual,date:'2099-10-22',time:'12:30'},cookie)).status,400);
  const shortSlots=(await request('/api/slots?date=2099-10-22&service=barba')).data;assert(shortSlots.includes('12:30'),'30-minute service may end exactly at block start');
  config.value.blocks=[];config=(await request('/api/admin/schedule','PUT',config,cookie)).data;
  assert((await request('/api/slots?date=2099-10-22&service=corte')).data.includes('13:00'),'Removing block restores availability');
@@ -42,8 +52,8 @@ content.services.value.corte.price=299;assert.equal((await request('/api/admin/s
  assert.deepEqual((await request('/api/slots?date=2099-10-21&service=corte')).data,[]);
  assert.equal((await request('/api/bookings','POST',{...booking,time:'15:00'})).status,400);
  assert.equal((await request('/api/admin/schedule','PUT',schedule,cookie)).status,409);
- assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).data.length,2);
- await stop();await start();assert.equal((await request('/api/admin/schedule','GET',undefined,cookie)).data.value.blocks[0].id,'day-off');assert.equal((await request('/api/content')).data.services.value.corte.price,299);assert.equal((await request('/api/content')).data.gallery.value[0].title,'Test photo');assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).data.length,2);assert.equal((await request('/api/logout','POST',{},cookie)).status,200);assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).status,401);
+ assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).data.length,4);
+ await stop();await start();assert.equal((await request('/api/admin/schedule','GET',undefined,cookie)).data.value.blocks[0].id,'day-off');assert.equal((await request('/api/content')).data.services.value.corte.price,299);assert.equal((await request('/api/content')).data.gallery.value[0].title,'Test photo');assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).data.length,4);assert.equal((await request('/api/logout','POST',{},cookie)).status,200);assert.equal((await request('/api/admin/bookings','GET',undefined,cookie)).status,401);
  }finally{if(proc&&proc.exitCode===null)await stop();if(path.dirname(dir)!==os.tmpdir()||!path.basename(dir).startsWith('bravo-test-'))throw Error('Unexpected cleanup path');fs.rmSync(dir,{recursive:true,force:true})}
 });
 
