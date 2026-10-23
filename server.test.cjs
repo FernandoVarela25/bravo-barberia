@@ -4,7 +4,7 @@ test('Authentication, persistence, permissions and booking conflicts',async()=>{
  async function start(){proc=spawn(process.execPath,['server.cjs'],{cwd:__dirname,env:{...process.env,PORT:String(port),HOST:'127.0.0.1',APP_ORIGIN:'',DATA_DIR:dir},stdio:['ignore','pipe','pipe']});await new Promise((resolve,reject)=>{const t=setTimeout(()=>reject(Error('startup timeout')),10000);proc.stdout.once('data',()=>{clearTimeout(t);resolve()});proc.once('exit',()=>{clearTimeout(t);reject(Error('server exited'))})})}
  async function stop(){await new Promise(r=>{proc.once('exit',r);proc.kill()})}
  async function request(url,method='GET',body,cookie,origin=base){const res=await fetch(base+url,{method,headers:{Origin:origin,'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},body:body===undefined?undefined:JSON.stringify(body)});return {status:res.status,data:await res.json(),cookie:res.headers.get('set-cookie')}}
- try{await start();assert.equal((await request('/api/admin/bookings')).status,401);assert.equal((await request('/api/admin/gallery','PUT',{})).status,401);assert.equal((await request('/api/session')).data.setupRequired,true);
+ try{await start();assert.equal((await request('/api/style/status')).data.enabled,false);assert.equal((await request('/api/style/recommend','POST',{})).status,503);assert.equal((await request('/api/admin/bookings')).status,401);assert.equal((await request('/api/admin/gallery','PUT',{})).status,401);assert.equal((await request('/api/session')).data.setupRequired,true);
  const credentials={username:'test-admin',password:crypto.randomBytes(24).toString('hex')};assert.equal((await request('/api/setup','POST',credentials)).status,201);assert.equal((await request('/api/setup','POST',credentials)).status,409);assert.equal((await request('/api/login','POST',{...credentials,password:'incorrect'})).status,401);
  const login=await request('/api/login','POST',credentials);assert.equal(login.status,200);assert.match(login.cookie,/HttpOnly/);assert.match(login.cookie,/SameSite=Strict/);const cookie=login.cookie.split(';')[0];assert.equal((await request('/api/session','GET',undefined,cookie)).data.authenticated,true);
  let content=(await request('/api/content')).data;
@@ -15,11 +15,11 @@ test('Authentication, persistence, permissions and booking conflicts',async()=>{
  assert.equal((await request('/api/admin/site','PUT',site,cookie)).status,409);
  assert.equal((await request('/api/content')).data.site.value.headline,'Estudio azul');
 content.services.value.corte.price=299;assert.equal((await request('/api/admin/services','PUT',content.services,cookie)).status,200);assert.equal((await request('/api/admin/services','PUT',content.services,cookie)).status,409);assert.equal((await request('/api/admin/gallery','PUT',content.gallery,cookie,'https://attacker.example')).status,403);
- const manual={service:'corte',date:'2099-11-01',time:'10:00',name:'WhatsApp test',phone:'5500000000'};
+ const manual={service:'corte',date:'2099-11-01',time:'10:00',name:'WhatsApp test',phone:'5500000000',styleId:'crop'};
  assert.equal((await request('/api/admin/bookings','POST',manual)).status,401);
  assert.equal((await request('/api/admin/bookings','POST',{...manual,time:'02:00'},cookie)).status,400);
  const manualResult=await request('/api/admin/bookings','POST',manual,cookie);assert.equal(manualResult.status,201);
- const savedManual=(await request('/api/admin/bookings','GET',undefined,cookie)).data.find(b=>b.id===manualResult.data.id);assert.equal(savedManual.source,'whatsapp');assert.equal(savedManual.status,'confirmada');assert.equal(savedManual.price,299);
+ const savedManual=(await request('/api/admin/bookings','GET',undefined,cookie)).data.find(b=>b.id===manualResult.data.id);assert.equal(savedManual.source,'whatsapp');assert.equal(savedManual.style,'Crop texturizado');assert.equal(savedManual.status,'confirmada');assert.equal(savedManual.price,299);
  const manualSlots=(await request('/api/slots?date=2099-11-01&service=corte')).data;assert(!manualSlots.includes('10:00'));assert(!manualSlots.includes('10:30'));assert(manualSlots.includes('11:00'));
  assert.equal((await request('/api/bookings','POST',manual)).status,409);assert.equal((await request('/api/admin/bookings','POST',manual,cookie)).status,409);
  assert.equal((await request('/api/admin/bookings/'+manualResult.data.id,'PATCH',{status:'cancelada'},cookie)).status,200);
